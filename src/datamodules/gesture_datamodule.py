@@ -6,9 +6,11 @@ from src import utils
 import numpy as np
 from src.datamodules.components.motion_data import MotionDataset, TestDataset
 from torch.utils.data import DataLoader
-from pytorch_lightning.loggers import LightningLoggerBase
+from pytorch_lightning.loggers import Logger
+# LightningLoggerBase
 from src import utils
 from src.pymo.writers import *
+
 import torch
 from scipy import stats
 import pandas as pd

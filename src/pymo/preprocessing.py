@@ -9,10 +9,8 @@ import pandas as pd
 import numpy as np
 import transforms3d as t3d
 import scipy.ndimage.filters as filters
-
 from sklearn.base import BaseEstimator, TransformerMixin
-
-from rotation_tools import euler2expmap, expmap2euler, euler_reorder, unroll
+from .rotation_tools import euler2expmap, expmap2euler, euler_reorder, unroll
 from Quaternions import Quaternions
 from Pivots import Pivots
 from tqdm import tqdm
