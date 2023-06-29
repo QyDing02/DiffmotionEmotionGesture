@@ -32,7 +32,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         pl.seed_everything(cfg.seed, workers=True)
 
     log.info(f"Instantiating datamodule <{cfg.datamodule._target_}>")
-    datamodule: LightningDataModule = hydra.utils.instantiate(cfg.datamodule)
+    datamodule: LightningDataModule = hydra.utils.instantiate(cfg.datamodule) #src.datamodules.gesture_datamodule_beat.GestureDataModule datamodule_gesture_generation_beat.yaml
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
     # summary(model,

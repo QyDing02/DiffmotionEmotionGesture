@@ -10,13 +10,13 @@ from pytorch_lightning.loggers import Logger
 # LightningLoggerBase
 from src import utils
 from src.pymo.writers import *
-
+import hydra
+from torch.utils.data import Dataset
 import torch
 from scipy import stats
 import pandas as pd
 
 log = utils.get_pylogger(__name__)
-
 
 class GestureDataModule(LightningDataModule):
     def __init__(self,
@@ -30,7 +30,7 @@ class GestureDataModule(LightningDataModule):
                  num_workers: int = 16
 
                  # test: int = 0,
-                 ):
+        ):
         super(GestureDataModule, self).__init__()
         # region variable define
         self.test_output = None
@@ -73,8 +73,8 @@ class GestureDataModule(LightningDataModule):
         print(os.path.join(self.data_root, 'input_scaler.sav'))
         self.input_scaler = jl.load(os.path.join(self.data_root, 'input_scaler.sav'))
         self.output_scaler = jl.load(os.path.join(self.data_root, 'output_scaler.sav'))
-        # log.info(self.input_scaler)
-        # log.info(self.output_scaler)
+        log.info(self.input_scaler)
+        log.info(self.output_scaler)
 
         # load pipeline for conversion from motion features to BVH.
         self.data_pipe = jl.load(os.path.join(self.data_root, 'data_pipe_' + str(self.framerate) + 'fps.sav'))
@@ -104,6 +104,10 @@ class GestureDataModule(LightningDataModule):
         if stage in (None, "fit"):
             log.info(f'-----------------setup stage: {stage}')
             # Create pytorch data sets
+            # # beat
+            # self.train_dataset = __import__(f"src.datamodules.components.beat", fromlist=["something"]).CustomDataset(loader_type = "train")
+            # self.validation_dataset = __import__(f"src.datamodules.components.beat", fromlist=["something"]).CustomDataset(loader_type = "val")
+            # diffusion
             self.train_dataset = MotionDataset(control_data=self.train_input, joint_data=self.train_output,
                                                framerate=self.framerate,
                                                seqlen=self.seqlen, n_lookahead=self.n_lookahead,
@@ -133,8 +137,11 @@ class GestureDataModule(LightningDataModule):
             test_output = np.zeros((test_input.shape[0], test_input.shape[1], self.n_x_channels)).astype(
                 np.float32)  # [100,400,45]
             # log.info(f'setup --> test_output shape: {test_output.shape} \n {test_output}')
+            # sr:
             self.test_dataset = TestDataset(test_input, test_output)
-            # self.test_dataset = TestDataset(test_input, self.test_output)
+            # beat
+            # self.test_dataset = __import__(f"src.datamodules.components.beat",
+            #                                      fromlist=["something"]).CustomDataset("test")
 
     def n_channels(self):
         return self.n_x_channels, self.n_cond_channels
@@ -147,6 +154,24 @@ class GestureDataModule(LightningDataModule):
             shuffle=True,
             drop_last=True,
         )
+
+        # #beat
+        # train_data_loader = DataLoader(
+        #     self.train_dataset,
+        #     batch_size=self.batch_size,
+        #     shuffle=True,
+        #     num_workers=self.num_workers,
+        #     drop_last=True,
+        # )
+        # beat sr:
+        # train_data_loader = DataLoader(
+        #     self.train_dataset,
+        #     batch_size=args.batch_size,
+        #     shuffle=False if self.ddp else True,
+        #     num_workers=args.loader_workers,
+        #     drop_last=True,
+        #     sampler=torch.utils.data.distributed.DistributedSampler(self.train_data) if self.ddp else None,
+        # )
         return train_data_loader
 
     def val_dataloader(self):
@@ -157,6 +182,24 @@ class GestureDataModule(LightningDataModule):
             shuffle=False,
             drop_last=True
         )
+        # # beat
+        # val_data_loader = DataLoader(
+        #     self.validation_dataset,
+        #     batch_size=self.batch_size,
+        #     shuffle=False,
+        #     num_workers=self.num_workers,
+        #     drop_last=True,#false
+        # )
+        #beat sr
+        # val_data_loader = torch.utils.data.DataLoader(
+        #     self.validation_dataset,
+        #     batch_size=args.batch_size,
+        #     shuffle=False,
+        #     num_workers=args.loader_workers,
+        #     drop_last=False,
+        #     sampler=torch.utils.data.distributed.DistributedSampler(self.val_data) if self.ddp else None,
+        # )
+
         return val_data_loader
 
     def test_dataloader(self):

@@ -85,7 +85,7 @@ class GestureTimeGradLightingModule(LightningModule):
         log.info(f"val mean_loss: {loss}")
         return {"loss": loss, "likelihoods": likelihoods}
 
-    def validation_epoch_end(self, outputs: List[Any]):
+    def   validation_epoch_end(self, outputs: List[Any]):
         pass
 
     def on_test_start(self):

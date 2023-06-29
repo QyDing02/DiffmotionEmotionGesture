@@ -258,6 +258,7 @@ class GaussianDiffusion(nn.Module):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_noisy = self.q_sample(x_start=x_start, t=time_step, noise=noise)  # p3/p4 in paper
+        # # print("p_losses: ---------", cond.shape, x_noisy.shape)
         x_recon = self.denoise_fn(x_noisy, time_step, cond=cond)  # EpsilonTheta() εΘ()
         # logger.info(f'-' * 5 + 'εΘ(sqrt(alpha_ba)*x_t^0 + sqrt(1-alpha_ba)*ε,h_t-1, noise)')
 
@@ -277,10 +278,13 @@ class GaussianDiffusion(nn.Module):
         #     x /= self.scale
 
         B, T, _ = x.shape
+        # print("log_prob: -------------------------")
+        # print("x.shape ", x.shape) # [80,34,141]
+        # print("cond.shape: ", cond.shape) # [80,512] *= 40960
 
         time = torch.randint(0, self.num_timesteps, (B * T,), device=x.device).long()  # num_timesteps = 100
         loss = self.p_losses(
-            x.reshape(B * T, 1, -1), cond.reshape(B * T, 1, -1), time, *args, **kwargs
+            x.reshape(B * T, 1, -1), cond.reshape(B * T, 1, -1), time, *args, **kwargs # RuntimeError: shape '[2720, 1, -1]' is invalid for input of size 40960
         )
         # log.info(f'Gaussian diffusion loss shape: {np.shape(loss)}')
 

@@ -12,13 +12,13 @@ from omegaconf import DictConfig
 # adds root dir to the PYTHONPATH (so this file can be run from any place)
 # https://github.com/ashleve/pyrootutils
 root = pyrootutils.setup_root(__file__, dotenv=True, pythonpath=True)
-
+from build_vocab import *
 
 @hydra.main(version_base="1.2", config_path=str(root / "configs"), config_name="train_gesture_generation.yaml")
 def main(cfg: DictConfig) -> float:
 
     # imports can be nested inside @hydra.main to optimize tab completion
-    # https://github.com/facebookresearch/hydra/issues/934
+    # https://github.com/faTotal length of `DataLoader` across ranks is zero.cebookresearch/hydra/issues/934
     from src.tasks.train_task import train
     from src.utils import get_metric_value
 

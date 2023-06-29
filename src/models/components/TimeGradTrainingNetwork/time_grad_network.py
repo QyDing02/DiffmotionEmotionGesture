@@ -71,9 +71,12 @@ class TimeGradTrainingNetwork(nn.Module):
         self.target_dim = target_dim
         self.prediction_length = prediction_length
         self.scaling = scaling
+        self.num_cells = num_cells
 
         self.cell_type = cell_type
         # self.init_rnn = True
+        
+        self.full = nn.Linear(36266,34 * num_cells)
 
         rnn_cls = {"LSTM": nn.LSTM, "GRU": nn.GRU}[cell_type]
         self.rnn = rnn_cls(
@@ -181,11 +184,25 @@ class TimeGradTrainingNetwork(nn.Module):
         #     index_embeddings.unsqueeze(1).expand(-1,95,-1,-1).reshape((-1,95,45))
         # )
         # combined_cond = torch.cat((combined_cond, repeated_index_embeddings), dim=-1)
-        rnn_outputs, _ = self.rnn(combined_cond)
-        # distr_args = self.distr_args(rnn_outputs=rnn_outputs)
+
+        ## src Diffmotion
+        # rnn_outputs, _ = self.rnn(combined_cond)  # rnn的hiddensize就是outputs——size
+
+        rnn_outputs = self.full(combined_cond)
+        # print("full connection ____________")
+        # print(combined_cond.shape, rnn_outputs.shape)
+        rnn_outputs = rnn_outputs.reshape(256, 34, self.num_cells)
+        # print("rnn size: ", rnn_outputs.shape)
+
+        distr_args = self.distr_args(rnn_outputs=rnn_outputs)
         if self.scaling:
             x_input, _ = self.actnorm(x_input, None, reverse=False) # TODO: may be problem
         # x_input_scaled = self.shuffle(x_input_scaled, False)
+
+        # print("forward: _________________________________-")
+        # print("target pose x_input size: ", x_input.shape)
+        # print("combined_cond size: ", combined_cond.shape)
+
         likelihoods = self.diffusion.log_prob(x_input, rnn_outputs).unsqueeze(-1)
 
         return likelihoods, likelihoods.mean()

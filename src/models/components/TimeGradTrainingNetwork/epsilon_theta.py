@@ -53,10 +53,16 @@ class ResidualBlock(nn.Module):
         nn.init.kaiming_normal_(self.output_projection.weight)
 
     def forward(self, x, conditioner, diffusion_step):
+
+
         diffusion_step = self.diffusion_projection(diffusion_step).unsqueeze(-1)
         conditioner = self.conditioner_projection(conditioner)
 
         y = x + diffusion_step
+        # print("epsilon------------------------")
+        # print("ResidualBlock: x", x.shape)
+        # print(y.shape, self.dilated_conv(y).shape, conditioner.shape)
+
         y = self.dilated_conv(y) + conditioner
 
         gate, filter = torch.chunk(y, 2, dim=1)

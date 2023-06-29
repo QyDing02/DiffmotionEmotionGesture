@@ -4,7 +4,7 @@
 root_dir: ${oc.env:PROJECT_ROOT}
 
 # path to data directory
-data_dir: ${paths.root_dir}/data/GesturesData
+data_dir: ${paths.root_dir}/data/GesturesData #${paths.root_dir}/data/beat_cache/beat_4english_15_141 #
 
 # path to logging directory
 log_dir: ${paths.root_dir}/logs/

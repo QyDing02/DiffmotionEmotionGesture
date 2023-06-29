@@ -10,13 +10,13 @@ from pytorch_lightning.loggers import Logger
 # LightningLoggerBase
 from src import utils
 from src.pymo.writers import *
-
+import hydra
+from torch.utils.data import Dataset
 import torch
 from scipy import stats
 import pandas as pd
 
 log = utils.get_pylogger(__name__)
-
 
 class GestureDataModule(LightningDataModule):
     def __init__(self,
@@ -27,7 +27,7 @@ class GestureDataModule(LightningDataModule):
                  dropout: float = 0.4,
                  batch_size: int = 80,
                  input_size: int = 972,
-                 num_workers: int = 16
+                 num_workers: int = 0 #16
 
                  # test: int = 0,
         ):
@@ -104,13 +104,9 @@ class GestureDataModule(LightningDataModule):
         if stage in (None, "fit"):
             log.info(f'-----------------setup stage: {stage}')
             # Create pytorch data sets
-            # beat
-            self.train_dataset: Dataset = hydra.utils.instantiate(cfg.dataset_train)
-            # self.train_dataset = __import__(f"dataloaders.{args.dataset}", fromlist=["something"]).CustomDataset(args,
-            self.validation_dataset: Dataset = hydra.utils.instantiate(cfg.dataset_val)
-            "train")
-            # self.validation_dataset = __import__(f"dataloaders.{args.dataset}", fromlist=["something"]).CustomDataset(args, "val")
-
+            # # beat
+            self.train_dataset = __import__(f"src.datamodules.components.beat", fromlist=["something"]).CustomDataset(loader_type = "train")
+            self.validation_dataset = __import__(f"src.datamodules.components.beat", fromlist=["something"]).CustomDataset(loader_type = "val")
             # diffusion
             # self.train_dataset = MotionDataset(control_data=self.train_input, joint_data=self.train_output,
             #                                    framerate=self.framerate,
@@ -141,8 +137,11 @@ class GestureDataModule(LightningDataModule):
             test_output = np.zeros((test_input.shape[0], test_input.shape[1], self.n_x_channels)).astype(
                 np.float32)  # [100,400,45]
             # log.info(f'setup --> test_output shape: {test_output.shape} \n {test_output}')
-            self.test_dataset = TestDataset(test_input, test_output)
-            # self.test_dataset = TestDataset(test_input, self.test_output)
+            # sr:
+            # self.test_dataset = TestDataset(test_input, test_output)
+            # beat
+            self.test_dataset = __import__(f"src.datamodules.components.beat",
+                                                 fromlist=["something"]).CustomDataset("test")
 
     def n_channels(self):
         return self.n_x_channels, self.n_cond_channels

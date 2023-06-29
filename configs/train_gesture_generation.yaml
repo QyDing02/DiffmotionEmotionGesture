@@ -4,8 +4,10 @@
 # order of defaults determines the order in which configs override each other
 defaults:
   - _self_
-  - datamodule: datamodule_gesture_generation.yaml
-  - model: gesture_diffusion_lightningmodule.yaml
+  - datamodule: datamodule_gesture_generation_beat.yaml #datamodule_gesture_generation_beat.yaml #datamodule_gesture_generation.yaml
+  - dataset_train: beat_train_dataset_gesture_generation.yaml #src.datamodules.components.beat.py
+  - dataset_val: beat_val_dataset_gesture_generation.yaml #src.datamodules.components.beat.py
+  - model: gesture_diffusion_lightningmodule_beat.yaml
   - callbacks: callbacks_gesture_diffusion.yaml
   - logger: wandb.yaml # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
   #- trainer: default.yaml
