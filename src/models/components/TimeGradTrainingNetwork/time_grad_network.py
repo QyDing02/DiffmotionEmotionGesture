@@ -44,6 +44,68 @@ class LinearZeroInit(nn.Linear):
         self.bias.data.zero_()
 
 
+
+
+class BasicBlock(nn.Module):
+    """ based on timm: https://github.com/rwightman/pytorch-image-models """
+    def __init__(self, inplanes, planes, ker_size, stride=1, downsample=None, cardinality=1, base_width=64,
+                 reduce_first=1, dilation=1, first_dilation=None, act_layer=nn.LeakyReLU,   norm_layer=nn.BatchNorm1d, attn_layer=None, aa_layer=None, drop_block=None, drop_path=None):
+        super(BasicBlock, self).__init__()
+
+        self.conv1 = nn.Conv1d(
+            inplanes, planes, kernel_size=ker_size, stride=stride, padding=first_dilation,
+            dilation=dilation, bias=True)
+        self.bn1 = norm_layer(planes)
+        self.act1 = act_layer(inplace=True)
+        self.conv2 = nn.Conv1d(
+            planes, planes, kernel_size=ker_size, padding=ker_size//2, dilation=dilation, bias=True)
+        self.bn2 = norm_layer(planes)
+        self.act2 = act_layer(inplace=True)
+        if downsample is not None:
+            self.downsample = nn.Sequential(
+                nn.Conv1d(inplanes, planes,  stride=stride, kernel_size=ker_size, padding=first_dilation, dilation=dilation, bias=True),
+                norm_layer(planes), 
+            )
+        else: self.downsample=None
+        self.stride = stride
+        self.dilation = dilation
+        self.drop_block = drop_block
+        self.drop_path = drop_path
+
+    def zero_init_last_bn(self):
+        nn.init.zeros_(self.bn2.weight)
+
+    def forward(self, x):
+        shortcut = x
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        if self.downsample is not None:
+            shortcut = self.downsample(shortcut)
+        x += shortcut
+        x = self.act2(x)
+        return x
+
+class WavEncoder(nn.Module):
+    def __init__(self, out_dim):
+        super().__init__() 
+        self.out_dim = out_dim
+        self.feat_extractor = nn.Sequential( 
+                BasicBlock(1, 32, 15, 5, first_dilation=1600, downsample=True),
+                BasicBlock(32, 32, 15, 6, first_dilation=0, downsample=True),
+                BasicBlock(32, 32, 15, 1, first_dilation=7, ),
+                BasicBlock(32, 64, 15, 6, first_dilation=0, downsample=True),
+                BasicBlock(64, 64, 15, 1, first_dilation=7),
+                BasicBlock(64, 128, 15, 6,  first_dilation=0,downsample=True),     
+            )
+        
+    def forward(self, wav_data):
+        wav_data = wav_data.unsqueeze(1) 
+        out = self.feat_extractor(wav_data)
+        return out.transpose(1, 2) 
+
 class TimeGradTrainingNetwork(nn.Module):
     @validated()
     def __init__(
@@ -72,11 +134,51 @@ class TimeGradTrainingNetwork(nn.Module):
         self.prediction_length = prediction_length
         self.scaling = scaling
         self.num_cells = num_cells
+        self.dropout_prob = 0.3
 
         self.cell_type = cell_type
+        self.audio_f = 128
+        self.emotion_f = 8
+        self.emotion_dims = 8
+        self.emotion_embedding = True
         # self.init_rnn = True
         
-        self.full = nn.Linear(36266,34 * num_cells)
+
+        #audio 
+        self.audio_encoder = WavEncoder(self.audio_f)
+        self.in_size = 128 + 8
+        self.hidden_size = 256 #512
+        self.n_layer = 2 #4
+        self.LSTM = nn.LSTM(self.in_size, hidden_size=self.hidden_size, num_layers=self.n_layer, batch_first=True,
+                          bidirectional=True, dropout=self.dropout_prob)
+        
+        # emotion
+        self.emotion_embedding = None
+        if self.emotion_f is not 0:
+            # self.in_size += self.emotion_f
+            
+            self.emotion_embedding =   nn.Sequential(
+                nn.Embedding(self.emotion_dims, self.emotion_f),
+                nn.Linear(self.emotion_f, self.emotion_f) 
+            )
+
+            self.emotion_embedding_tail = nn.Sequential( 
+                nn.Conv1d(self.emotion_f, 8, 9, 1, 4),
+                nn.BatchNorm1d(8),
+                nn.LeakyReLU(0.3, inplace=True),
+                nn.Conv1d(8, 16, 9, 1, 4),
+                nn.BatchNorm1d(16),
+                nn.LeakyReLU(0.3, inplace=True),
+                nn.Conv1d(16, 16, 9, 1, 4),
+                nn.BatchNorm1d(16),
+                nn.LeakyReLU(0.3, inplace=True),
+                nn.Conv1d(16, self.emotion_f, 9, 1, 4),
+                nn.BatchNorm1d(self.emotion_f),
+                nn.LeakyReLU(0.3, inplace=True),
+            )
+        
+        # self.full = nn.Linear(36266,34 * num_cells)
+        self.full = nn.Linear(input_size,34 * num_cells)
 
         rnn_cls = {"LSTM": nn.LSTM, "GRU": nn.GRU}[cell_type]
         self.rnn = rnn_cls(
@@ -159,7 +261,10 @@ class TimeGradTrainingNetwork(nn.Module):
             self,
             trainer,
             x_input: torch.Tensor,
-            cond: torch.Tensor, ):
+            cond: torch.Tensor, 
+            word: torch.Tensor, 
+            id: torch.Tensor, 
+            emo: torch.Tensor):
         # x_input_scaled, _ = self.actnorm(x_input, None, reverse=False)
         # combined_input = torch.cat((x_input_scaled, cond), dim=-1)
         #
@@ -188,11 +293,26 @@ class TimeGradTrainingNetwork(nn.Module):
         ## src Diffmotion
         # rnn_outputs, _ = self.rnn(combined_cond)  # rnn的hiddensize就是outputs——size
 
-        rnn_outputs = self.full(combined_cond)
-        # print("full connection ____________")
-        # print(combined_cond.shape, rnn_outputs.shape)
-        rnn_outputs = rnn_outputs.reshape(256, 34, self.num_cells)
-        # print("rnn size: ", rnn_outputs.shape)
+        ## 用一层全连接层
+        # rnn_outputs = self.full(combined_cond)
+        # # print("full connection ____________")
+        # # print(combined_cond.shape, rnn_outputs.shape)
+        # rnn_outputs = rnn_outputs.reshape(256, 34, self.num_cells)
+        # # print("rnn size: ", rnn_outputs.shape)
+
+        audio_feat_seq = self.audio_encoder(combined_cond) 
+        in_data = audio_feat_seq
+        if self.emotion_embedding:
+            emo_feat_seq = self.emotion_embedding(emo)
+            emo_feat_seq = emo_feat_seq.permute([0,2,1])
+            emo_feat_seq = self.emotion_embedding_tail(emo_feat_seq) 
+            emo_feat_seq = emo_feat_seq.permute([0,2,1])
+            in_data = torch.cat((in_data, emo_feat_seq), 2) if in_data is not None else emo_feat_seq
+          
+        rnn_outputs, _ = self.LSTM(in_data)
+        # print("audio_feat_seq", audio_feat_seq.shape)
+        # print("rnn_outputs", rnn_outputs.shape)
+        # rnn_outputs = torch.as_tenso(rnn_outputs, dtype=None, device=None)
 
         distr_args = self.distr_args(rnn_outputs=rnn_outputs)
         if self.scaling:

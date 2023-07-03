@@ -485,7 +485,7 @@ class CustomDataset(Dataset):
             in_audio.reshape(1, in_audio.shape[0])
             # print("in_audio ", in_audio.shape)
             # print("tar_pose ", tar_pose.shape)
-            return {"x": tar_pose, "cond": in_audio}
+            return {"x": tar_pose, "cond": in_audio, "word": in_word, "id": vid, "emo": emo}
 
 
 class MotionPreprocessor:

@@ -27,6 +27,7 @@ hardware: Geforce RTX 3090
 
 ## Training
 ### with default parameters setting:
+# export PYTHONPATH="${PYTHONPATH}:/home/lingling/code/DiffmotionEmotionGesture/src/pymo"
 `python train_gesture_generation.py`  
 The trained model and the predicted bvh files will be saved in folder:  
 ./logs/gesture_generation/runs/yyyy-mm-day-hour-minute

@@ -48,9 +48,9 @@ class GestureTimeGradLightingModule(LightningModule):
         self.prediction_net = prediction_net
         self.train_step_count = 1
 
-    def forward(self, x: torch.Tensor, cond: torch.Tensor):
+    def forward(self, x: torch.Tensor, cond: torch.Tensor, word: torch.Tensor, id: torch.Tensor, emo: torch.Tensor):
         trainer = self.trainer
-        return self.train_net(trainer,x, cond)
+        return self.train_net(trainer, x, cond, word, id, emo)
 
     def on_train_start(self):
         # by default lightning executes validation step sanity checks before training starts,
@@ -61,7 +61,11 @@ class GestureTimeGradLightingModule(LightningModule):
     def train_step(self, batch: Any):
         x = batch["x"]  # the output of body pose corresponding to the condition [80,95,45]
         cond = batch["cond"]  # [80,95,927]
-        likelihoods, mean_loss = self.forward(x, cond)
+        word = batch["word"]  # 
+        id = batch["id"]  # 
+        emo = batch["emo"]  # emo
+
+        likelihoods, mean_loss = self.forward(x, cond, word, id, emo)
         return likelihoods, mean_loss
 
     def training_step(self, batch: Any, batch_idx: int):
@@ -98,6 +102,7 @@ class GestureTimeGradLightingModule(LightningModule):
         #     # log.info(f'prediction_net_para: {name}:\n {prediction_net_para.data}')
         #     log.info(f'prediction_net_para: {name}:\n {prediction_net_para.data}')
 
+    # !!!!!!!!!!!!!!!!!!!!!要修改吧
     def test_step(self, batch: Any, batch_idx: int):
         # ipdb.set_trace()
         autoreg_all = batch["autoreg"].cuda()  # [20, 400, 45]
