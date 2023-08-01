@@ -1,0 +1,5 @@
+[default]
+entity = natalielll
+project = gesture-generation
+base_url = https://api.wandb.ai
+

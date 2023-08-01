@@ -108,7 +108,7 @@ def build_vocab(name, data_path, cache_path, word_vec_path=None, feat_dim=None):
 
     with open(cache_path, 'wb') as f:
         pickle.dump(lang_model, f)
-
+    print("success!")
     return lang_model
 
 
@@ -130,8 +130,9 @@ def index_words_from_textgrid(lang_model, data_path):
     # 依次处理train test val
     trainvaltest = os.listdir(data_path)
     for loadtype in trainvaltest:
-        if "." in loadtype: continue  # ignore .ipynb_checkpoints
+        if "." or 'weights' in loadtype: continue  # ignore .ipynb_checkpoints
         texts = os.listdir(data_path + loadtype + "/text/")
+        texts = [x for x in texts if '.uuid' not in x]
         # 读取全部的文本并与处理完存起来
         for textfile in texts:
             tgrid = tg.TextGrid.fromFile(data_path + loadtype + "/text/" + textfile)
@@ -150,5 +151,5 @@ def index_words_from_textgrid(lang_model, data_path):
 if __name__ == "__main__":
     # 11195 for all, 5793 for 4 speakers ori: ../../../datasets/beat_cache/beat_english_15_141
     # build_vocab("beat_english_15_141", "../../../datasets/beat_cache/beat_4english_15_141/", "../../../datasets/beat_cache/beat_4english_15_141/vocab.pkl", "../../../datasets/cc.en.300.bin", 300)
-    build_vocab("beat_english_15_141", "../../../datasets/beat_cache/beat_4english_15_141/",
-                "../../../datasets/beat_cache/beat_4english_15_141/vocab.pkl", None, 300)
+    build_vocab("beat_english_15_141", "/home/lingling/code/DiffmotionEmotionGesture_v1/data/beat_cache/beat_4english_15_141_v3/",
+                "/home/lingling/code/DiffmotionEmotionGesture_v1/data/beat_cache/beat_4english_15_141_v3/vocab.pkl", None, 300)

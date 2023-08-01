@@ -2,11 +2,11 @@
 
 defaults:
   - _self_
-  - datamodule: mnist.yaml # choose datamodule with `test_dataloader()` for evaluation
-  - model: mnist.yaml
-  - logger: null
-  - trainer: default.yaml
-  - paths: default.yaml
+  - datamodule: datamodule_gesture_generation_beat.yaml # choose datamodule with `test_dataloader()` for evaluation
+  - model: gesture_diffusion_lightningmodule_beat.yaml
+  - logger: wandb.yaml
+  - trainer: gpu.yaml
+  - paths: path_gesture_generation.yaml
   - extras: default.yaml
   - hydra: default.yaml
 
@@ -15,4 +15,4 @@ task_name: "eval"
 tags: ["dev"]
 
 # passing checkpoint path is necessary for evaluation
-ckpt_path: ???
+ckpt_path: /home/lingling/code/DiffmotionEmotionGesture_v1/logs/gesture_generation/runs/2023-07-22_14-20-28/checkpoints/epoch_029.ckpt

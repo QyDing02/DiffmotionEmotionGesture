@@ -21,6 +21,7 @@ import scipy.io.wavfile
 from scipy import signal
 # from .build_vocab import * #Vocab
 
+
 from src import utils
 log = utils.get_pylogger(__name__)
 
@@ -76,15 +77,15 @@ class CustomDataset(Dataset):
 
         self.root_path = ".."
         self.out_root_path = "/outputs/audio2pose/"
-        self.train_data_path = "/data/beat_cache/beat_4english_15_141_v2/train/"
-        self.val_data_path = "/data/beat_cache/beat_4english_15_141_v2/val/"
+        self.train_data_path = "/data/beat_cache/beat_4english_15_141_v3/train/"
+        self.val_data_path = "/data/beat_cache/beat_4english_15_141_v3/val/"
         self.multi_length_training = [1.0]
-        self.test_data_path = "/data/beat_cache/beat_4english_15_141_v2/test/"
-        self.mean_pose_path = "/data/beat_cache/beat_4english_15_141_v2/train/"
-        self.std_pose_path = "/data/beat_cache/beat_4english_15_141_v2/train/"
+        self.test_data_path = "/data/beat_cache/beat_4english_15_141_v3/test/"
+        self.mean_pose_path = "/data/beat_cache/beat_4english_15_141_v3/train/"
+        self.std_pose_path = "/data/beat_cache/beat_4english_15_141_v3/train/"
 
-        self.e_path = "/data/beat_cache/beat_4english_15_141_v2/weights/ae_300.bin"
-        self.test_ckpt = "/data/beat_cache/beat_4english_15_141_v2/weights/camn.bin"
+        self.e_path = "/data/beat_cache/beat_4english_15_141_v3/weights/ae_300.bin"
+        self.test_ckpt = "/data/beat_cache/beat_4english_15_141_v3/weights/camn.bin"
 
         self.disable_filtering = disable_filtering #args.disable_filtering
         self.clean_first_seconds = clean_first_seconds #args.clean_first_seconds
@@ -127,6 +128,7 @@ class CustomDataset(Dataset):
         with self.lmdb_env.begin() as txn:
             self.n_samples = txn.stat()["entries"]
         log.info("CustomDataset initialed.")
+
     def build_cache(self, preloaded_dir):
         logger.info(f"Audio bit rate: {self.audio_fps}")
         logger.info("Reading data '{}'...".format(self.data_dir))
@@ -152,16 +154,17 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return self.n_samples
-
+    
     def cache_generation(self, out_lmdb_dir, disable_filtering, clean_first_seconds, clean_final_seconds,
                          is_test=False):
         self.n_out_samples = 0
         pose_files = sorted(glob.glob(os.path.join(self.data_dir, f"{self.pose_rep}") + "/*.bvh"), key=str, )
+        logger.info(f"f{len(pose_files)}")
         # create db for samples
-        map_size = int(1024 * 1024 * 2048 * (self.audio_fps / 16000) ** 3 * 4) * (
-                    len(pose_files) / 30 * (self.pose_fps / 15)) * len(self.multi_length_training) * \
-                   self.multi_length_training[-1] * 2  # in 1024 MB
-        dst_lmdb_env = lmdb.open(out_lmdb_dir, map_size=map_size)
+        
+        map_size = int(1024 * 1024 * 2048 * (self.audio_fps/16000)**3 * 4) * (len(pose_files)//30*(self.pose_fps/15)) * len(self.multi_length_training) * self.multi_length_training[-1] * 2  # in 1024 MB
+        logger.info(f"map_size: {map_size}")
+        dst_lmdb_env = lmdb.open(out_lmdb_dir, map_size=int(1e13))
         n_filtered_out = defaultdict(int)
 
         for pose_file in pose_files:
@@ -196,6 +199,7 @@ class CustomDataset(Dataset):
                     #                         sr, audio_each_file = scipy.io.wavfile.read(audio_file) # np array
                     #                     audio_each_file = audio_each_file[::sr//16000]
                     audio_each_file = np.load(audio_file)
+                    log.info(f"audio_each_file:{audio_each_file.shape}")
                 except:
                     logger.warning(f"# ---- file not found for Audio {id_pose}, skip all files with the same id ---- #")
                     continue
@@ -482,8 +486,7 @@ class CustomDataset(Dataset):
             # return {"pose": tar_pose, "audio": in_audio, "facial": in_facial, "word": in_word, "id": vid, "emo": emo,
             #         "sem": sem}
             # print(emo)
-            in_audio.reshape(1, in_audio.shape[0])
-            # print("in_audio ", in_audio.shape)
+            in_audio.reshape(1, in_audio.shape[0])   
             # print("tar_pose ", tar_pose.shape)
             return {"x": tar_pose, "cond": in_audio, "word": in_word, "id": vid, "emo": emo}
 

@@ -71,6 +71,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
 
     if cfg.get("test"):
         log.info("Starting testing!")
+        # ckpt_path = "/home/lingling/code/DiffmotionEmotionGesture_v1/logs/gesture_generation/runs/2023-07-29_23-25-00/checkpoints/epoch_036.ckpt"
         ckpt_path = trainer.checkpoint_callback.best_model_path
         if ckpt_path == "":
             log.warning("Best ckpt not found! Using current weights for testing...")

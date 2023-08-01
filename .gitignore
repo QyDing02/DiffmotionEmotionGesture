@@ -292,3 +292,8 @@ cython_debug/
 
 /logs/gesture_generation/
 /logs/train/
+
+/train_beat_*.txt
+/src/train_beat_*.txt
+
+.uuid

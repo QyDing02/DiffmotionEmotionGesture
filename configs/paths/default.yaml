@@ -13,6 +13,7 @@ log_dir: ${paths.root_dir}/logs/
 # path generation pattern is specified in `configs/hydra/default.yaml`
 # use it to store all files generated during the run, like ckpts and metrics
 output_dir: ${hydra:runtime.output_dir}
+# output_dir: /home/lingling/code/DiffmotionEmotionGesture_v1/logs/gesture_generation/runs/2023-07-22_14-20-28
 
 # path to working directory
 work_dir: ${hydra:runtime.cwd}

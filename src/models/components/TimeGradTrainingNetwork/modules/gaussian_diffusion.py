@@ -170,6 +170,7 @@ class GaussianDiffusion(nn.Module):
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(self, x, cond, timestep, clip_denoised: bool):
+
         x_recon = self.predict_start_from_noise(
             x, t=timestep, noise=self.denoise_fn(x, timestep, cond=cond)
         )
@@ -211,13 +212,17 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     def sample(self, sample_shape=torch.Size(), cond=None, img=None):
+        B, T, _ = img.shape
         if cond is not None:
-            shape = cond.shape[:-1] + (self.input_size,)
+            # shape = cond.shape[:-1] + (self.input_size,)
             # log.info(f'sample cond shape : {shape}')
             # TODO reshape cond to (B*T, 1, -1)
+            cond = cond.reshape(cond.shape[0]*cond.shape[1] , 1, -1)
+            shape = cond.shape[:-1] + (self.input_size,)
+
         else:
             shape = sample_shape
-        x_hat = self.p_sample_loop(shape=shape, cond=cond, img=img)  # TODO reshape x_hat to (B,T,-1)
+        x_hat = self.p_sample_loop(shape=shape, cond=cond, img=img.reshape(B * T, 1, -1))  # TODO reshape x_hat to (B,T,-1)
         # log.info(f'sample x_hat shape : {x_hat.shape}')
 
         # if self.scale is not None:
