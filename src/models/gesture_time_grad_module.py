@@ -12,6 +12,7 @@ import hydra
 import omegaconf
 import pyrootutils
 import ipdb
+from scipy import linalg
 
 log = utils.get_pylogger(__name__)
 
@@ -106,16 +107,37 @@ class GestureTimeGradLightingModule(LightningModule):
     def test_step(self, batch: Any, batch_idx: int):
         log.info("test_step----------------------------------------")
         x = batch["x"].cuda()  # the output of body pose corresponding to the condition [80,95,45]
-        cond = batch["cond"].cuda()  # [80,95,927]
-        word = batch["word"].cuda()  # 
-        id = batch["id"].cuda()  # 
-        emo = batch["emo"].cuda()  # emo
+        cond = batch["cond"].cuda()  # [1, 960000]  # [80,95,927]
+        word = batch["word"].cuda()  # [1, 900]
+        id = batch["id"].cuda()  # [1, 1]
+        emo = batch["emo"].cuda()  # [1, 900] # emo
         log.info(f"batch_idx:{batch_idx} ----------------------------------------")
         log.info(f"x.shape:{x.shape} cond.shape:{cond.shape}----------------------------------------")
         trainer = self.trainer
         output = self.prediction_net.forward(x, cond, word, id, emo, batch_idx, trainer)
 
+        # print output.shape to log
+        # log.info(f"output.shape:{output.shape}----------------------------------------")
+        real_feats = x.squeeze(0)  
+        generated_feats = output.squeeze(0)
+
+        real_feats = real_feats.cpu().numpy()
+        generated_feats = generated_feats.cpu().numpy()
+
+        fgd = self.calculate_fgd(real_feats, generated_feats)
         
+        # x_cropped = x[:, -95:, :]
+        # x_cropped_2d = x_cropped.flatten()
+        # output_2d = output.reshape(-1, 45) 
+        # x_cropped_2d = x_cropped.reshape(-1, 45)
+
+        # log.info(f"x_cropped.shape:{x_cropped.shape}")
+        # log.info(f"output.shape:{output.shape}")
+        # log.info(f"x_cropped_2d.shape:{x_cropped_2d.shape}")
+        # log.info(f"output_2d.shape:{output_2d.shape}")
+        # fgd = self.calculate_fgd(x_cropped_2d, output_2d)  
+        self.log("test/fgd", fgd, on_step=False, on_epoch=True, prog_bar=True)
+        log.info(f"test fgd: {fgd}")
 
         # # ipdb.set_trace()
         # autoreg_all = batch["autoreg"].cuda()  # [20, 400, 45]
@@ -147,81 +169,71 @@ class GestureTimeGradLightingModule(LightningModule):
         return {
             "optimizer": self.hparams.optimizer(params=self.parameters()),
         }
-        
-    #### add by dqy begin
-    # def calculate_fgd(self, real_gestures, generated_gestures):
-    #     A_mu = np.mean(real_gestures, axis=0)
-    #     A_sigma = np.cov(real_gestures, rowvar=False)
-    #     B_mu = np.mean(generated_gestures, axis=0)
-    #     B_sigma = np.cov(generated_gestures, rowvar=False)
-    #     print("A_mu", end='')
-    #     print(A_mu)
-    #     print("A_sigma", end='')
-    #     print(A_sigma)
-    #     print("B_mu", end='')
-    #     print(B_mu)
-    #     print("B_sigma", end='')
-    #     print(B_sigma)
-    #     try:
-    #         frechet_dist = self.calculate_frechet_distance(A_mu, A_sigma, B_mu, B_sigma)
-    #     except ValueError:
-    #         frechet_dist = 1e+10
-    #     return frechet_dist
+         
+    def calculate_fgd(self, real_gestures, generated_gestures):
+        A_mu = np.mean(real_gestures, axis=0)
+        A_sigma = np.cov(real_gestures, rowvar=False)
+        B_mu = np.mean(generated_gestures, axis=0)
+        B_sigma = np.cov(generated_gestures, rowvar=False)
+        try:
+            frechet_dist = self.calculate_frechet_distance(A_mu, A_sigma, B_mu, B_sigma)
+        except ValueError:
+            frechet_dist = 1e+10
+        return frechet_dist
 
-    # def calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
-    #     """ from https://github.com/mseitzer/pytorch-fid/blob/master/fid_score.py """
-    #     """Numpy implementation of the Frechet Distance.
-    #     The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
-    #     and X_2 ~ N(mu_2, C_2) is
-    #             d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
-    #     Stable version by Dougal J. Sutherland.
-    #     Params:
-    #     -- mu1   : Numpy array containing the activations of a layer of the
-    #                inception net (like returned by the function 'get_predictions')
-    #                for generated samples.
-    #     -- mu2   : The sample mean over activations, precalculated on an
-    #                representative data set.
-    #     -- sigma1: The covariance matrix over activations for generated samples.
-    #     -- sigma2: The covariance matrix over activations, precalculated on an
-    #                representative data set.
-    #     Returns:
-    #     --   : The Frechet Distance.
-    #     """
+    def calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
+        """ from https://github.com/mseitzer/pytorch-fid/blob/master/fid_score.py """
+        """Numpy implementation of the Frechet Distance.
+        The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
+        and X_2 ~ N(mu_2, C_2) is
+                d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
+        Stable version by Dougal J. Sutherland.
+        Params:
+        -- mu1   : Numpy array containing the activations of a layer of the
+                   inception net (like returned by the function 'get_predictions')
+                   for generated samples.
+        -- mu2   : The sample mean over activations, precalculated on an
+                   representative data set.
+        -- sigma1: The covariance matrix over activations for generated samples.
+        -- sigma2: The covariance matrix over activations, precalculated on an
+                   representative data set.
+        Returns:
+        --   : The Frechet Distance.
+        """
 
-    #     mu1 = np.atleast_1d(mu1)
-    #     mu2 = np.atleast_1d(mu2)
+        mu1 = np.atleast_1d(mu1)
+        mu2 = np.atleast_1d(mu2)
 
-    #     sigma1 = np.atleast_2d(sigma1)
-    #     sigma2 = np.atleast_2d(sigma2)
+        sigma1 = np.atleast_2d(sigma1)
+        sigma2 = np.atleast_2d(sigma2)
 
-    #     assert mu1.shape == mu2.shape, \
-    #         'Training and test mean vectors have different lengths'
-    #     assert sigma1.shape == sigma2.shape, \
-    #         'Training and test covariances have different dimensions'
+        assert mu1.shape == mu2.shape, \
+            'Training and test mean vectors have different lengths'
+        assert sigma1.shape == sigma2.shape, \
+            'Training and test covariances have different dimensions'
 
-    #     diff = mu1 - mu2
+        diff = mu1 - mu2
 
-    #     # Product might be almost singular
-    #     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
-    #     if not np.isfinite(covmean).all():
-    #         msg = ('fid calculation produces singular product; '
-    #                'adding %s to diagonal of cov estimates') % eps
-    #         print(msg)
-    #         offset = np.eye(sigma1.shape[0]) * eps
-    #         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+        # Product might be almost singular
+        covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+        if not np.isfinite(covmean).all():
+            msg = ('fid calculation produces singular product; '
+                   'adding %s to diagonal of cov estimates') % eps
+            print(msg)
+            offset = np.eye(sigma1.shape[0]) * eps
+            covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
 
-    #     # Numerical error might give slight imaginary component
-    #     if np.iscomplexobj(covmean):
-    #         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
-    #             m = np.max(np.abs(covmean.imag))
-    #             raise ValueError('Imaginary component {}'.format(m))
-    #         covmean = covmean.real
+        # Numerical error might give slight imaginary component
+        if np.iscomplexobj(covmean):
+            if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+                m = np.max(np.abs(covmean.imag))
+                raise ValueError('Imaginary component {}'.format(m))
+            covmean = covmean.real
 
-    #     tr_covmean = np.trace(covmean)
+        tr_covmean = np.trace(covmean)
 
-    #     return (diff.dot(diff) + np.trace(sigma1) +
-    #             np.trace(sigma2) - 2 * tr_covmean)
-    #### add by dqy end
+        return (diff.dot(diff) + np.trace(sigma1) +
+                np.trace(sigma2) - 2 * tr_covmean)
 
 
 if __name__ == "__main__":
