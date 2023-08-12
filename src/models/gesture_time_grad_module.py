@@ -95,6 +95,7 @@ class GestureTimeGradLightingModule(LightningModule):
     def on_test_start(self):
         log.info('-----------------on_test_start--------------')
         copy_parameters(self.train_net, self.prediction_net)
+        self.srgr_list = []
         log.info('-----------------copy_parameters--------------')
         # for name, train_net_para in self.train_net.named_parameters():
         #     log.info(f'train_net_para: {name}:\n {train_net_para.data}')
@@ -111,6 +112,7 @@ class GestureTimeGradLightingModule(LightningModule):
         word = batch["word"].cuda()  # [1, 900]
         id = batch["id"].cuda()  # [1, 1]
         emo = batch["emo"].cuda()  # [1, 900] # emo
+        sem = batch["sem"].cuda() 
         log.info(f"batch_idx:{batch_idx} ----------------------------------------")
         log.info(f"x.shape:{x.shape} cond.shape:{cond.shape}----------------------------------------")
         trainer = self.trainer
@@ -123,9 +125,33 @@ class GestureTimeGradLightingModule(LightningModule):
 
         real_feats = real_feats.cpu().numpy()
         generated_feats = generated_feats.cpu().numpy()
+        
+        # log.info(f"real_feats.shape:{real_feats.shape}----------------------------------------")
+        # log.info(f"generated_feats.shape:{generated_feats.shape}----------------------------------------")
+        sem_h = sem.cpu().numpy()
+        # pose_dimes = real_feats.shape[1]
+        pose_dimes = 47
+        frame_num = real_feats.shape[0]
+        threshold = 4
+
 
         fgd = self.calculate_fgd(real_feats, generated_feats)
-        
+
+        # Perform reverse standardization on generated_feats and real_feats
+
+        # log.info(f"generated_feats.shape:{generated_feats.shape}----------------------------------------")
+        # log.info(f"real_feats.shape:{real_feats.shape}----------------------------------------")
+        # (855, 141)  , which means (length, 141)
+        self.mean_pose = np.load("/home/lingling/code/DiffmotionEmotionGesture_v1/data/beat_cache/beat_4english_15_141_v3/train/bvh_rot/bvh_mean.npy")
+        self.std_pose = np.load("/home/lingling/code/DiffmotionEmotionGesture_v1/data/beat_cache/beat_4english_15_141_v3/train/bvh_rot/bvh_std.npy")
+
+        out_final = (generated_feats * self.std_pose) + self.mean_pose
+        np_cat_results = out_final
+        np_cat_targets = (real_feats * self.std_pose) + self.mean_pose
+
+
+        SRGR = self.calculate_srgr(np_cat_results, np_cat_targets, sem_h, pose_dimes, threshold)        
+        self.srgr_list.append((SRGR, frame_num))
         # x_cropped = x[:, -95:, :]
         # x_cropped_2d = x_cropped.flatten()
         # output_2d = output.reshape(-1, 45) 
@@ -138,6 +164,9 @@ class GestureTimeGradLightingModule(LightningModule):
         # fgd = self.calculate_fgd(x_cropped_2d, output_2d)  
         self.log("test/fgd", fgd, on_step=False, on_epoch=True, prog_bar=True)
         log.info(f"test fgd: {fgd}")
+
+        self.log("test/SRGR", SRGR, on_step=False, on_epoch=True, prog_bar=True)
+        log.info(f"test SRGR: {SRGR}")
 
         # # ipdb.set_trace()
         # autoreg_all = batch["autoreg"].cuda()  # [20, 400, 45]
@@ -156,6 +185,9 @@ class GestureTimeGradLightingModule(LightningModule):
         return output
 
     def test_epoch_end(self, outputs: List[Any]):
+        self.srgr_list = np.array(self.srgr_list)
+        srgr_mean = self.calculate_weighted_average(self.srgr_list)
+        log.info(f"srgr_mean: {srgr_mean}")
         # self.test_acc.reset()
         pass
 
@@ -169,6 +201,37 @@ class GestureTimeGradLightingModule(LightningModule):
         return {
             "optimizer": self.hparams.optimizer(params=self.parameters()),
         }
+    
+    def calculate_weighted_average(self, value_list):
+        total_weighted_sum = 0.0
+        total_frame_num = 0
+
+        for value, frame_num in value_list:
+            weighted_value = value * frame_num
+            total_weighted_sum += weighted_value
+            total_frame_num += frame_num
+
+        if total_frame_num == 0:
+            return None 
+
+        weighted_average = total_weighted_sum / total_frame_num
+        return weighted_average
+
+    def calculate_srgr(self, results, targets, semantic, pose_dimes, threshold):
+        results = results.reshape(-1, pose_dimes, 3)
+        targets = targets.reshape(-1, pose_dimes, 3)
+        semantic = semantic.reshape(-1)
+        diff = np.sum(abs(results-targets),2)
+        success = np.where(diff < threshold, 1.0, 0.0)
+        # success = np.ones_like(success)
+        for i in range(success.shape[0]):
+            # srgr == 0.165 when all success, scale range to [0, 1] 
+            success[i, :] *= semantic[i] * (1/0.165) 
+        rate = np.sum(success)/(success.shape[0]*success.shape[1])
+        
+        return rate   # The final calculated SRGR value should be weighted based on success.shape[0]
+
+
          
     def calculate_fgd(self, real_gestures, generated_gestures):
         A_mu = np.mean(real_gestures, axis=0)
